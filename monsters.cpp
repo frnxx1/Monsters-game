@@ -145,6 +145,10 @@ public:
             data[r][c] = '.';
         }
     }
+    char getC(int index)
+    {
+        return monster[index];
+    }
 };
 
 class BaseMonster {
@@ -162,7 +166,10 @@ public:
     }
 
     virtual ~BaseMonster() {}
-
+    void destroy()
+    {
+        delete this;
+    }
     void set(Place& p1) {
         p = &p1;
         p->spawn(x, y, index);
@@ -177,6 +184,7 @@ public:
             isAlive = false;
             p->removeMonster(index, x, y);
             std::cout << ">>> Monster " << index << " DIED! <<<\n";
+            
         }
     }
 
@@ -269,44 +277,119 @@ public:
     }
 };
 
+class Game
+{
+private:
+    BaseMonster** m;
+    int size;
+    int cap;
+public:
+    Game(int s) : size(s), cap(s*2)
+    {
+        m = new BaseMonster * [cap]; 
+        m[0] = new Dragon(0); m[3] = new Dragon(3);
+        m[1] = new Zombie(1); m[4] = new Zombie(4);
+        m[2] = new Goblin(2); m[5] = new Goblin(5);
+        random_heap();
+    }
+    void random_heap()
+    {
+        for (int i = 0; i < size; ++i)
+            std::swap(m[i], m[std::rand() % size]);
+    }
+    void pushback(BaseMonster* b)
+    {
+        if (size >= cap) 
+        {
+            cap *= 2;
+            BaseMonster** temp = new BaseMonster * [cap]; 
+            for (int i = 0; i < size; ++i) {
+                temp[i] = m[i]; 
+            }
+            delete[] m; 
+            m = temp;   
+        }
+        m[size++] = b; 
+    }
+    
+    BaseMonster* popFront()
+    {
+        if (size == 0) return nullptr;
+
+        BaseMonster* front = m[0];
+        for (int i = 0; i < size - 1; ++i)
+        {
+            m[i] = m[i + 1];
+        }
+        size--;
+        return front;
+    }
+    BaseMonster** getAllMonsters() { return m; }
+
+    
+    void setPlace(Place& p) {
+        for (int i = 0; i < size; ++i) {
+            m[i]->set(p);
+        }
+    }
+
+    
+    int countAlive() {
+        int count = 0;
+        for (int i = 0; i < size; ++i) {
+            if (m[i]->isAlive) count++;
+        }
+        return count;
+    }
+};
+
 int main() {
     srand(time(0));
     setlocale(LC_ALL, "Russian");
 
     Place p("Data.txt");
 
-    BaseMonster* m[6];
-    m[0] = new Dragon(0); m[3] = new Dragon(3);
-    m[1] = new Zombie(1); m[4] = new Zombie(4);
-    m[2] = new Goblin(2); m[5] = new Goblin(5);
-
-    for (int i = 0; i < 6; ++i) {
-        m[i]->set(p);
-    }
+    Game game(6);
+    game.setPlace(p);
 
     int aliveCount = 6;
 
+    int turn = 1;
 
-    while (aliveCount > 1) {
+    while (game.countAlive() > 1) {
+        std::cout << "\n--- TURN " << turn++ << " ---\n";
 
-        char next;
-        for (int i = 0; i < 6; ++i)
-        {
-            if (m[i]->isAlive) {
-                m[i]->walk(m);
-                m[i]->info();
+        int monstersToMove = game.countAlive(); 
+
+        for (int step = 0; step < monstersToMove; ++step) {
+            BaseMonster* current = game.popFront();
+
+            if (current->isAlive) {
+                
+                if (current->index <= 2) {
+                    char choice;
+                    std::cout << "It's your monster (" << p.getC(current->index) << "). Choose direction (l/r): ";
+                    std::cin >> choice;
+                    if (choice == 'l' || choice == 'L') current->dir = -1;
+                    if (choice == 'r' || choice == 'R') current->dir = 1;
+                }
+
+                current->walk(game.getAllMonsters());
+                current->info();
+                p.print();
+
+                if (current->isAlive) {
+                    game.pushback(current);
+                }
             }
         }
-        p.print();
 
-        aliveCount = 0;
-        for (int i = 0; i < 6; ++i) {
-            if (m[i]->isAlive) aliveCount++;
-        }
+        
 
-        std::cout << "Alive: " << aliveCount << "\n";
+        std::cout << "Alive: " << game.countAlive() << "\n";
 
-        std::cin >> next;
+        std::cout << "Press Enter for next turn\n";
+        std::cin.get();
     }
 
 
